@@ -41,7 +41,7 @@ as gpg --export "$fpr" > "$WWW/smooth-archive-keyring.gpg"
 for conf in "$SRC"/conf/archives/*/distributions; do
     name=$(basename "$(dirname "$conf")")
     base=$HOME_DIR/archives/$name
-    install -d -o smoothapt -g smoothapt "$base/conf" "$WWW/$name"
+    install -d -o smoothapt -g smoothapt "$base" "$base/conf" "$WWW/$name"
     sed "s/@SIGNWITH@/$fpr/" "$conf" > "$base/conf/distributions"
     printf 'outdir %s\n' "$WWW/$name" > "$base/conf/options"
     chown smoothapt:smoothapt "$base/conf/distributions" "$base/conf/options"
