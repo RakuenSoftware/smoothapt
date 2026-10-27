@@ -46,8 +46,8 @@ machine updates.rakuensoftware.com/smoothrouter login <id> password <token>
 
 `conf/sources` lists the projects. Every hour `smoothapt-ingest`:
 
-1. lists each project's GitHub releases; with `stable`, only full releases
-   (a `v*` tag), since a prerelease only means the pipeline built it;
+1. lists each project's GitHub releases, prereleases included, so every
+   build the pipeline publishes from `main` reaches the archive unattended;
 2. downloads every `.deb` of a release it has not seen (debug-symbol packages
    excepted) and fetches its attestation by digest from GitHub;
 3. verifies it with `cosign` against the public Sigstore log: the certificate

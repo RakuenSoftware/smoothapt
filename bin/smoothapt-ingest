@@ -78,11 +78,11 @@ def read_sources():
             line = line.split("#", 1)[0].split()
             if not line:
                 continue
-            if len(line) != 5 or line[4] not in ("stable", "all"):
-                sys.exit(f"{SOURCES}:{n}: expected <repo> <archive> <suite> <workflow> stable|all")
-            repo, archive, suite, workflow, releases = line
+            if len(line) != 4:
+                sys.exit(f"{SOURCES}:{n}: expected <repo> <archive> <suite> <workflow>")
+            repo, archive, suite, workflow = line
             sources.append(dict(repo=repo, archive=archive, suite=suite,
-                                workflow=workflow, releases=releases))
+                                workflow=workflow))
     return sources
 
 
@@ -190,8 +190,6 @@ def run(src):
     for rel in releases:
         tag = rel["tag_name"]
         if rel["draft"] or tag in state["ingested"] or tag in state["rejected"]:
-            continue
-        if rel["prerelease"] and src["releases"] == "stable":
             continue
         # Older than what is already here: it was superseded before smoothapt
         # saw it, and apt would never pick it anyway.
