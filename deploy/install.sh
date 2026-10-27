@@ -64,9 +64,17 @@ for conf in "$SRC"/conf/archives/*/distributions; do
     # The certificate list and revocations are created empty once and then
     # owned by smoothapt-user.
     if [ "$name" != public ]; then
-        for f in "$name.certs" "$name.revoked"; do
-            [ -f "/etc/smoothapt/users/$f" ] || install -m 640 -g www-data /dev/null "/etc/smoothapt/users/$f"
-        done
+        [ -f "/etc/smoothapt/users/$name.certs" ] ||
+            install -m 640 -g www-data /dev/null "/etc/smoothapt/users/$name.certs"
+        if [ -f "/etc/smoothapt/users/$name.revoked" ]; then
+            # Revocations were an nginx map ("<serial> 1;") before.
+            mv "/etc/smoothapt/users/$name.revoked" "/etc/smoothapt/users/$name.revoked.map"
+            install -d -m 755 "/etc/smoothapt/users/$name.revoked"
+            awk '{print $1}' "/etc/smoothapt/users/$name.revoked.map" |
+                while read -r serial; do touch "/etc/smoothapt/users/$name.revoked/$serial"; done
+            rm "/etc/smoothapt/users/$name.revoked.map"
+        fi
+        install -d -m 755 "/etc/smoothapt/users/$name.revoked"
         rm -f "/etc/smoothapt/users/$name.htpasswd"
     fi
 done

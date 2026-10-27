@@ -98,8 +98,9 @@ smoothapt-user list smoothrouter
 ```
 
 Issued certificates are listed in `/etc/smoothapt/users/smoothrouter.certs`
-(id and serial; the key is shown once, by `add`), revoked serials in
-`smoothrouter.revoked`, and every add and revoke is logged in
+(id and serial; the key is shown once, by `add`), revoked serials as files in
+`smoothrouter.revoked/` (checked per request, so a revoke is immediate), and
+every add and revoke is logged in
 `smoothrouter.log`. Requests: `/var/log/nginx/smoothapt.log`.
 
 ## Deployment

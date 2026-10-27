@@ -8,7 +8,8 @@
 # A user's credential is a client certificate issued by smoothapt's CA, with
 # the user id as its subject. It is part of the image built for that user, and
 # apt presents it on every request. The host's nginx checks it against the CA;
-# this container's nginx refuses revoked serials and logs every request with
+# this container's nginx refuses revoked serials (a file per serial in
+# <archive>.revoked/, checked per request) and logs every request with
 # the id. Every add and revoke is appended to <archive>.log.
 set -eu
 
@@ -22,7 +23,7 @@ usage() { sed -n '3,5s/^# //p' "$0" >&2; exit 2; }
 cmd=$1 archive=$2
 case $archive in *[!a-z0-9-]* | '') echo "bad archive name: $archive" >&2; exit 2 ;; esac
 index=$DIR/$archive.certs      # "<id> <serial>" per issued certificate
-revoked=$DIR/$archive.revoked  # nginx map: "<serial> 1;"
+revoked=$DIR/$archive.revoked  # one empty file per revoked serial
 [ -f "$index" ] || { echo "$archive has no user list ($index)" >&2; exit 1; }
 
 exec 9>"$DIR/.lock"
@@ -55,9 +56,8 @@ revoke)
     id=$3
     serial=$(serial_of "$id")
     [ -n "$serial" ] || { echo "$id has no access to $archive" >&2; exit 1; }
-    echo "$serial 1;" >> "$revoked"
+    install -m 644 /dev/null "$revoked/$serial"
     awk -v id="$id" '$1 != id' "$index" > "$index.tmp" && mv "$index.tmp" "$index"
-    systemctl reload nginx
     record revoke "$id $serial"
     ;;
 list)
