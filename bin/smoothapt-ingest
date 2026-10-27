@@ -28,6 +28,8 @@ import time
 import urllib.error
 import urllib.request
 
+import snappy
+
 ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 SOURCES = os.path.join(ROOT, "conf", "sources")
 ARCHIVES = "/var/lib/smoothapt/archives"
@@ -116,8 +118,13 @@ def verify(src, deb, digest, workdir):
     errors = []
     for i, att in enumerate(data.get("attestations", [])):
         bundle = os.path.join(workdir, f"{digest}.{i}.bundle.json")
-        with open(bundle, "w") as f:
-            json.dump(att["bundle"], f)
+        # Unauthenticated, GitHub leaves "bundle" empty and links the bundle,
+        # snappy-compressed, from "bundle_url" instead.
+        with open(bundle, "wb") as f:
+            if att.get("bundle"):
+                f.write(json.dumps(att["bundle"]).encode())
+            else:
+                f.write(snappy.uncompress(fetch(att["bundle_url"], accept="*/*")))
         r = subprocess.run(
             ["cosign", "verify-blob-attestation", "--new-bundle-format",
              "--bundle", bundle, "--type", "slsaprovenance1",

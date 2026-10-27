@@ -18,7 +18,7 @@ export GNUPGHOME=$HOME_DIR/gnupg
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
-    reprepro cosign gnupg nginx openssl python3 ca-certificates git >/dev/null
+    reprepro cosign gnupg nginx openssl python3 python3-snappy ca-certificates git >/dev/null
 
 id smoothapt >/dev/null 2>&1 ||
     useradd --system --home-dir "$HOME_DIR" --shell /usr/sbin/nologin smoothapt
