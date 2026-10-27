@@ -1,31 +1,34 @@
 #!/bin/sh
-# Manage the per-user credentials of an access-controlled archive.
+# Manage the per-user certificates of an access-controlled archive.
 #
-#   smoothapt-user add    <archive> <id>   issue a credential, print its apt line
+#   smoothapt-user add    <archive> <id>   issue a certificate, print it and its key
 #   smoothapt-user revoke <archive> <id>   withdraw it; apt is refused at once
 #   smoothapt-user list   <archive>        ids with access
 #
-# Each id gets its own random password. The printed line is what goes into the
-# image built for that user, as /etc/apt/auth.conf.d/smoothapt.conf. nginx
-# reads the htpasswd file on every request, so changes need no reload. Every
-# add and revoke is appended to <archive>.log next to it.
+# A user's credential is a client certificate issued by smoothapt's CA, with
+# the user id as its subject. It is part of the image built for that user, and
+# apt presents it on every request. The host's nginx checks it against the CA;
+# this container's nginx refuses revoked serials and logs every request with
+# the id. Every add and revoke is appended to <archive>.log.
 set -eu
 
-HOST=updates.rakuensoftware.com
+CA=/etc/smoothapt/ca
 DIR=/etc/smoothapt/users
+DAYS=36500   # revocation, not expiry, ends a credential
 
 usage() { sed -n '3,5s/^# //p' "$0" >&2; exit 2; }
 
 [ $# -ge 2 ] || usage
 cmd=$1 archive=$2
 case $archive in *[!a-z0-9-]* | '') echo "bad archive name: $archive" >&2; exit 2 ;; esac
-file=$DIR/$archive.htpasswd
-[ -f "$file" ] || { echo "$archive has no user list ($file)" >&2; exit 1; }
+index=$DIR/$archive.certs      # "<id> <serial>" per issued certificate
+revoked=$DIR/$archive.revoked  # nginx map: "<serial> 1;"
+[ -f "$index" ] || { echo "$archive has no user list ($index)" >&2; exit 1; }
 
 exec 9>"$DIR/.lock"
 flock 9
 
-has() { cut -d: -f1 "$file" | grep -qxF "$1"; }
+serial_of() { awk -v id="$1" '$1 == id { print $2 }' "$index"; }
 record() { echo "$(date -u +%FT%TZ) $1 $2" >> "$DIR/$archive.log"; }
 
 case $cmd in
@@ -33,24 +36,32 @@ add)
     [ $# -eq 3 ] || usage
     id=$3
     case $id in *[!a-z0-9._-]* | '' | [._-]*) echo "bad id: $id (a-z 0-9 . _ -)" >&2; exit 2 ;; esac
-    if has "$id"; then echo "$id already has access to $archive" >&2; exit 1; fi
-    token=$(openssl rand -hex 32)
-    echo "$id:$(printf %s "$token" | openssl passwd -6 -stdin)" >> "$file"
-    record add "$id"
-    echo "machine $HOST/$archive login $id password $token"
+    [ -z "$(serial_of "$id")" ] || { echo "$id already has access to $archive" >&2; exit 1; }
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$tmp/key.pem" 2>/dev/null
+    openssl req -new -key "$tmp/key.pem" -subj "/O=$archive/CN=$id" -out "$tmp/req.pem"
+    printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth\n' > "$tmp/ext"
+    openssl x509 -req -in "$tmp/req.pem" -CA "$CA/ca.crt" -CAkey "$CA/ca.key" \
+        -set_serial "0x$(openssl rand -hex 16)" -days "$DAYS" -sha256 \
+        -extfile "$tmp/ext" -out "$tmp/cert.pem" 2>/dev/null
+    serial=$(openssl x509 -in "$tmp/cert.pem" -noout -serial | cut -d= -f2)
+    echo "$id $serial" >> "$index"
+    record add "$id $serial"
+    cat "$tmp/cert.pem" "$tmp/key.pem"
     ;;
 revoke)
     [ $# -eq 3 ] || usage
     id=$3
-    has "$id" || { echo "$id has no access to $archive" >&2; exit 1; }
-    awk -F: -v id="$id" '$1 != id' "$file" > "$file.tmp"
-    chmod --reference="$file" "$file.tmp"
-    chown --reference="$file" "$file.tmp"
-    mv "$file.tmp" "$file"
-    record revoke "$id"
+    serial=$(serial_of "$id")
+    [ -n "$serial" ] || { echo "$id has no access to $archive" >&2; exit 1; }
+    echo "$serial 1;" >> "$revoked"
+    awk -v id="$id" '$1 != id' "$index" > "$index.tmp" && mv "$index.tmp" "$index"
+    systemctl reload nginx
+    record revoke "$id $serial"
     ;;
 list)
-    cut -d: -f1 "$file"
+    cut -d' ' -f1 "$index"
     ;;
 *) usage ;;
 esac

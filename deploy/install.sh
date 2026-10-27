@@ -8,6 +8,9 @@
 #
 # The archive signing key is generated here on first run and never leaves
 # /var/lib/smoothapt/gnupg; its public half is published as public-key.asc.
+# So is the CA that issues users' client certificates (smoothapt-user); its
+# key never leaves /etc/smoothapt/ca, and the host's nginx gets its
+# certificate (deploy/host-nginx.md).
 set -eu
 
 SRC=$(cd "$(dirname "$0")/.." && pwd)
@@ -25,6 +28,18 @@ id smoothapt >/dev/null 2>&1 ||
 install -d -o smoothapt -g smoothapt -m 755 "$HOME_DIR" "$HOME_DIR/archives" "$HOME_DIR/state" "$WWW"
 install -d -o smoothapt -g smoothapt -m 700 "$GNUPGHOME"
 install -d -m 750 -g www-data /etc/smoothapt/users
+install -d -m 700 /etc/smoothapt/ca
+
+if [ ! -f /etc/smoothapt/ca/ca.key ]; then
+    openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out /etc/smoothapt/ca/ca.key
+    chmod 600 /etc/smoothapt/ca/ca.key
+    openssl req -x509 -new -key /etc/smoothapt/ca/ca.key -sha256 -days 36500 \
+        -subj "/O=RakuenSoftware/CN=Smooth* Archive Client CA" \
+        -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
+        -addext "keyUsage=critical,keyCertSign,cRLSign" \
+        -out /etc/smoothapt/ca/ca.crt
+fi
+chmod 644 /etc/smoothapt/ca/ca.crt
 
 as() { runuser -u smoothapt -- env GNUPGHOME="$GNUPGHOME" HOME="$HOME_DIR" "$@"; }
 
@@ -46,9 +61,13 @@ for conf in "$SRC"/conf/archives/*/distributions; do
     printf 'outdir %s\n' "$WWW/$name" > "$base/conf/options"
     chown smoothapt:smoothapt "$base/conf/distributions" "$base/conf/options"
     as reprepro -b "$base" export
-    # The user list is created empty once and then owned by smoothapt-user.
-    if [ "$name" != public ] && [ ! -f "/etc/smoothapt/users/$name.htpasswd" ]; then
-        install -m 640 -g www-data /dev/null "/etc/smoothapt/users/$name.htpasswd"
+    # The certificate list and revocations are created empty once and then
+    # owned by smoothapt-user.
+    if [ "$name" != public ]; then
+        for f in "$name.certs" "$name.revoked"; do
+            [ -f "/etc/smoothapt/users/$f" ] || install -m 640 -g www-data /dev/null "/etc/smoothapt/users/$f"
+        done
+        rm -f "/etc/smoothapt/users/$name.htpasswd"
     fi
 done
 
