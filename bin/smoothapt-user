@@ -1,0 +1,56 @@
+#!/bin/sh
+# Manage the per-user credentials of an access-controlled archive.
+#
+#   smoothapt-user add    <archive> <id>   issue a credential, print its apt line
+#   smoothapt-user revoke <archive> <id>   withdraw it; apt is refused at once
+#   smoothapt-user list   <archive>        ids with access
+#
+# Each id gets its own random password. The printed line is what goes into the
+# image built for that user, as /etc/apt/auth.conf.d/smoothapt.conf. nginx
+# reads the htpasswd file on every request, so changes need no reload. Every
+# add and revoke is appended to <archive>.log next to it.
+set -eu
+
+HOST=updates.rakuensoftware.com
+DIR=/etc/smoothapt/users
+
+usage() { sed -n '3,5s/^# //p' "$0" >&2; exit 2; }
+
+[ $# -ge 2 ] || usage
+cmd=$1 archive=$2
+case $archive in *[!a-z0-9-]* | '') echo "bad archive name: $archive" >&2; exit 2 ;; esac
+file=$DIR/$archive.htpasswd
+[ -f "$file" ] || { echo "$archive has no user list ($file)" >&2; exit 1; }
+
+exec 9>"$DIR/.lock"
+flock 9
+
+has() { cut -d: -f1 "$file" | grep -qxF "$1"; }
+record() { echo "$(date -u +%FT%TZ) $1 $2" >> "$DIR/$archive.log"; }
+
+case $cmd in
+add)
+    [ $# -eq 3 ] || usage
+    id=$3
+    case $id in *[!a-z0-9._-]* | '' | [._-]*) echo "bad id: $id (a-z 0-9 . _ -)" >&2; exit 2 ;; esac
+    if has "$id"; then echo "$id already has access to $archive" >&2; exit 1; fi
+    token=$(openssl rand -hex 32)
+    echo "$id:$(printf %s "$token" | openssl passwd -6 -stdin)" >> "$file"
+    record add "$id"
+    echo "machine $HOST/$archive login $id password $token"
+    ;;
+revoke)
+    [ $# -eq 3 ] || usage
+    id=$3
+    has "$id" || { echo "$id has no access to $archive" >&2; exit 1; }
+    awk -F: -v id="$id" '$1 != id' "$file" > "$file.tmp"
+    chmod --reference="$file" "$file.tmp"
+    chown --reference="$file" "$file.tmp"
+    mv "$file.tmp" "$file"
+    record revoke "$id"
+    ;;
+list)
+    cut -d: -f1 "$file"
+    ;;
+*) usage ;;
+esac

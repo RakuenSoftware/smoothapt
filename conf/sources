@@ -1,0 +1,12 @@
+# Projects smoothapt ingests, one per line:
+#
+#   <github-repo>  <archive>  <suite>  <workflow>  <releases>
+#
+# archive   reprepro archive under /var/lib/smoothapt/archives (served as
+#           /<archive>/): "public", or "smoothrouter" for the per-user one.
+# workflow  the workflow file whose attestations a package must carry; any
+#           other signer (another repo, another workflow, a PR run) is refused.
+# releases  "stable": only full releases (a v* tag) -- a prerelease means the
+#           pipeline built it, not that it is promoted to users.
+#           "all": prereleases too.
+RakuenSoftware/smoothkernel  public  common  release.yml  stable
