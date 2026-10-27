@@ -21,11 +21,12 @@ export GNUPGHOME=$HOME_DIR/gnupg
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
-    reprepro cosign gnupg nginx openssl python3 python3-snappy ca-certificates git >/dev/null
+    reprepro cosign gnupg nginx openssl python3 python3-snappy ca-certificates git xorriso >/dev/null
 
 id smoothapt >/dev/null 2>&1 ||
     useradd --system --home-dir "$HOME_DIR" --shell /usr/sbin/nologin smoothapt
-install -d -o smoothapt -g smoothapt -m 755 "$HOME_DIR" "$HOME_DIR/archives" "$HOME_DIR/state" "$WWW"
+install -d -o smoothapt -g smoothapt -m 755 "$HOME_DIR" "$HOME_DIR/archives" "$HOME_DIR/state" "$HOME_DIR/images" "$WWW"
+install -d -o smoothapt -g smoothapt -m 700 "$HOME_DIR/tmp"
 install -d -o smoothapt -g smoothapt -m 700 "$GNUPGHOME"
 install -d -m 750 -g www-data /etc/smoothapt/users
 install -d -m 700 /etc/smoothapt/ca
@@ -80,6 +81,7 @@ for conf in "$SRC"/conf/archives/*/distributions; do
 done
 
 ln -sf "$SRC/bin/smoothapt-user" /usr/local/sbin/smoothapt-user
+ln -sf "$SRC/bin/smoothapt-image" /usr/local/sbin/smoothapt-image
 install -m 644 "$SRC/deploy/nginx.conf" /etc/nginx/sites-available/smoothapt
 ln -sf ../sites-available/smoothapt /etc/nginx/sites-enabled/smoothapt
 rm -f /etc/nginx/sites-enabled/default

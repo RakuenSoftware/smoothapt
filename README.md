@@ -103,6 +103,29 @@ Issued certificates are listed in `/etc/smoothapt/users/smoothrouter.certs`
 every add and revoke is logged in
 `smoothrouter.log`. Requests: `/var/log/nginx/smoothapt.log`.
 
+## User images
+
+A SmoothRouter release carries the base installer image: the same for
+everyone, with no credential in it. `smoothapt-ingest` keeps the newest one
+under `/var/lib/smoothapt/images/smoothrouter/base/`. A user's image is made
+from it here, so the user's certificate never leaves this server except inside
+their image:
+
+```
+smoothapt-user add smoothrouter <id>      # once: issue the certificate
+smoothapt-image smoothrouter <id>         # the user's image from the newest base
+```
+
+The image is the base with the user's certificate and key on the medium as
+`/smoothrouter/client.pem`, which the installer installs for apt, signed with
+the user's key. It lands in `/var/lib/smoothapt/images/smoothrouter/users/<id>/`
+with `.sig`, `.crt` (issued by our CA) and `.sha256`:
+
+```
+openssl dgst -sha256 -verify <(openssl x509 -in <image>.crt -pubkey -noout) \
+    -signature <image>.sig <image>
+```
+
 ## Deployment
 
 Container `ct252` (10.1.0.252) on the VPS, Debian 13:

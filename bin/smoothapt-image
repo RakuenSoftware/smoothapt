@@ -1,0 +1,55 @@
+#!/bin/sh
+# Make a user's installer image from the newest base image.
+#
+#   smoothapt-image <archive> <id>
+#
+# The base image comes from the project's release (smoothapt-ingest keeps the
+# newest under /var/lib/smoothapt/images/<archive>/base): the same for
+# everyone, with no credential in it. The user's image is that base with the
+# user's certificate and key (smoothapt-user add) on the medium as
+# /smoothrouter/client.pem, which the installer installs for apt. It is signed
+# with the user's key; <image>.sig verifies against <image>.crt, which our CA
+# issued:
+#
+#   openssl dgst -sha256 -verify <(openssl x509 -in <image>.crt -pubkey -noout) \
+#       -signature <image>.sig <image>
+#
+# Output: /var/lib/smoothapt/images/<archive>/users/<id>/. The certificate
+# never leaves this server except inside the user's image.
+set -eu
+
+IMAGES=/var/lib/smoothapt/images
+KEYS=/etc/smoothapt/users
+
+[ $# -eq 2 ] || { sed -n '4p' "$0" | sed 's/^# //' >&2; exit 2; }
+archive=$1 id=$2
+case $archive in *[!a-z0-9-]* | '') echo "bad archive name: $archive" >&2; exit 2 ;; esac
+case $id in *[!a-z0-9._-]* | '' | [._-]*) echo "bad id: $id" >&2; exit 2 ;; esac
+
+pem=$KEYS/$archive.keys/$id.pem
+[ -f "$pem" ] || { echo "$id has no certificate for $archive (smoothapt-user add $archive $id)" >&2; exit 1; }
+base=$(find "$IMAGES/$archive/base" -maxdepth 1 -name '*.iso' 2>/dev/null | sort | tail -n 1)
+[ -n "$base" ] || { echo "no base image for $archive yet (ingested from its releases)" >&2; exit 1; }
+
+out=$IMAGES/$archive/users/$id
+install -d -m 700 "$out"
+name=$(basename "$base" .iso)-$id.iso
+work=$(mktemp -d /var/lib/smoothapt/tmp/image.XXXXXX)
+trap 'rm -rf "$work"' EXIT
+
+# xorriso adds the file and keeps the base's boot setup (BIOS, EFI, hybrid
+# USB) as it is.
+xorriso -indev "$base" -outdev "$work/$name" \
+    -map "$pem" /smoothrouter/client.pem \
+    -boot_image any replay >"$work/xorriso.log" 2>&1 || {
+    cat "$work/xorriso.log" >&2; exit 1; }
+
+sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' "$pem" > "$work/$name.crt"
+sed -n '/BEGIN PRIVATE KEY/,/END PRIVATE KEY/p' "$pem" > "$work/key.pem"
+openssl dgst -sha256 -sign "$work/key.pem" -out "$work/$name.sig" "$work/$name"
+rm -f "$work/key.pem"
+(cd "$work" && sha256sum "$name" > "$name.sha256")
+
+rm -f "$out"/*
+mv "$work/$name" "$work/$name.sig" "$work/$name.crt" "$work/$name.sha256" "$out/"
+echo "$out/$name"
