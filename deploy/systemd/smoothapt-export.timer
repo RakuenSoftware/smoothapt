@@ -1,0 +1,9 @@
+[Unit]
+Description=Re-sign the apt archives daily (Release files are valid for 7 days)
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

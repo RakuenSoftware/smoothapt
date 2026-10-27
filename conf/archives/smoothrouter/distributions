@@ -1,0 +1,9 @@
+Origin: RakuenSoftware
+Label: Smooth
+Codename: smoothrouter
+Suite: smoothrouter
+Architectures: amd64 arm64
+Components: main
+Description: SmoothRouter (per-user credential required)
+SignWith: @SIGNWITH@
+ValidFor: 7d

@@ -1,0 +1,8 @@
+[Unit]
+Description=Re-sign the apt archives' Release files before Valid-Until runs out
+
+[Service]
+Type=oneshot
+User=smoothapt
+Environment=HOME=/var/lib/smoothapt GNUPGHOME=/var/lib/smoothapt/gnupg
+ExecStart=/bin/sh -c 'for a in /var/lib/smoothapt/archives/*/; do reprepro -b "$a" export || exit 1; done'

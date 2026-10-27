@@ -1,0 +1,19 @@
+Origin: RakuenSoftware
+Label: Smooth
+Codename: common
+Suite: common
+Architectures: amd64 arm64
+Components: main
+Description: Packages shared by every Smooth* distribution (SmoothKernel)
+SignWith: @SIGNWITH@
+ValidFor: 7d
+
+Origin: RakuenSoftware
+Label: Smooth
+Codename: smoothnas
+Suite: smoothnas
+Architectures: amd64 arm64
+Components: main
+Description: SmoothNAS
+SignWith: @SIGNWITH@
+ValidFor: 7d
