@@ -29,7 +29,7 @@ Components: main
 Signed-By: /etc/apt/keyrings/smooth-archive-keyring.gpg
 ```
 
-A SmoothRouter adds the `smoothrouter` archive and its credential:
+A SmoothRouter adds the `smoothrouter` archive and its user's certificate:
 
 ```
 Types: deb
@@ -38,8 +38,9 @@ Suites: smoothrouter
 Components: main
 Signed-By: /etc/apt/keyrings/smooth-archive-keyring.gpg
 
-# /etc/apt/auth.conf.d/smoothapt.conf (mode 600)
-machine updates.rakuensoftware.com/smoothrouter login <id> password <token>
+# apt.conf: the certificate apt presents to updates.rakuensoftware.com
+Acquire::https::updates.rakuensoftware.com::SslCert "<certificate>";
+Acquire::https::updates.rakuensoftware.com::SslKey "<key>";
 ```
 
 ## Ingestion
@@ -84,18 +85,23 @@ gh attestation verify linux-image-7.2.10-70-smoothkernel_7.2.10-70_amd64.deb \
 
 ## Credentials
 
-Each SmoothRouter user has their own id and password, burned into the image
-built for them. On the server:
+Each SmoothRouter user has their own client certificate, issued by smoothapt's
+CA with the user id as its subject, and part of the image built for them. apt
+presents it on every request; the host's nginx verifies it against the CA, and
+the container refuses revoked ones and logs every request with the id. On the
+server:
 
 ```
-smoothapt-user add smoothrouter <id>     # prints the auth.conf.d line
-smoothapt-user revoke smoothrouter <id>  # that image is refused from now on
+smoothapt-user add smoothrouter <id>     # prints the certificate and its key
+smoothapt-user revoke smoothrouter <id>  # that user's images are refused from now on
 smoothapt-user list smoothrouter
 ```
 
-The list is `/etc/smoothapt/users/smoothrouter.htpasswd` (hashed passwords
-only; the password is shown once, by `add`); every add and revoke is logged
-in `smoothrouter.log` beside it.
+Issued certificates are listed in `/etc/smoothapt/users/smoothrouter.certs`
+(id and serial; the key is shown once, by `add`), revoked serials as files in
+`smoothrouter.revoked/` (checked per request, so a revoke is immediate), and
+every add and revoke is logged in
+`smoothrouter.log`. Requests: `/var/log/nginx/smoothapt.log`.
 
 ## Deployment
 
@@ -107,7 +113,7 @@ git clone https://github.com/RakuenSoftware/smoothapt /opt/smoothapt
 ```
 
 `install.sh` is idempotent; to update, `git pull` and run it again. On first
-run it generates the archive signing key in `/var/lib/smoothapt/gnupg`, which
-never leaves the container. The VPS host's nginx terminates TLS for
+run it generates the archive signing key in `/var/lib/smoothapt/gnupg` and the
+client CA in `/etc/smoothapt/ca`; neither key leaves the container. The VPS host's nginx terminates TLS for
 `updates.rakuensoftware.com` and proxies to the container (see
 `deploy/host-nginx.md`).
