@@ -252,11 +252,13 @@ def run(src):
             raise RuntimeError(f"repository not found or private ({hint})") from None
         raise
     releases = sorted((r for r in releases if not r["draft"]), key=lambda r: r["published_at"] or "")
-    # A project's first ingest starts from its newest release: the archive
-    # only ever serves the newest anyway, and older builds would each be
-    # downloaded and verified only to be pruned.
+    # A project's first ingest starts from its newest release it can take:
+    # the archive only ever serves the newest anyway, and older builds would
+    # each be downloaded and verified only to be pruned. It walks back past
+    # releases that are refused (e.g. SmoothNAS's testing prereleases, signed
+    # by a run on the testing branch) until one is ingested.
     if not state["ingested"]:
-        releases = releases[-1:]
+        releases = releases[::-1]
     for rel in releases:
         tag = rel["tag_name"]
         if tag in state["ingested"] or tag in state["rejected"]:
@@ -273,10 +275,13 @@ def run(src):
             save_state(src["repo"], state)
             log(f"{src['repo']} {tag}: REJECTED: {e}")
             continue
+        first = not state["ingested"]
         state["ingested"][tag] = {"published_at": rel["published_at"], "packages": names}
         prune(src, state)
         save_state(src["repo"], state)
         log(f"{src['repo']} {tag}: ingested into {src['archive']}/{src['suite']}: {' '.join(names)}")
+        if first:
+            break
 
 
 def main():

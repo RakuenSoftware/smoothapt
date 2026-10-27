@@ -17,3 +17,5 @@
 # a build from main reaches the archive with no manual step.
 RakuenSoftware/smoothkernel   public        common        release.yml  attestation
 RakuenSoftware/smoothrouter   smoothrouter  smoothrouter  release.yml  actions-upload
+RakuenSoftware/smoothfs       public        smoothnas     release-please.yml  attestation
+RakuenSoftware/smoothnas      public        smoothnas     release.yml  attestation
