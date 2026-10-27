@@ -49,15 +49,28 @@ machine updates.rakuensoftware.com/smoothrouter login <id> password <token>
 1. lists each project's GitHub releases, prereleases included, so every
    build the pipeline publishes from `main` reaches the archive unattended;
 2. downloads every `.deb` of a release it has not seen (debug-symbol packages
-   excepted) and fetches its attestation by digest from GitHub;
-3. verifies it with `cosign` against the public Sigstore log: the certificate
-   must be GitHub Actions' and name the project's workflow on `main` or a `v*`
-   tag, so a PR build or another repository cannot get a package in;
+   excepted);
+3. verifies it. For a public project (`attestation`), its attestation is
+   fetched by digest from GitHub and checked with `cosign` against the public
+   Sigstore log: the certificate must be GitHub Actions' and name the
+   project's workflow on `main` or a `v*` tag, so a PR build or another
+   repository cannot get a package in. A private project's attestations are
+   not in that log (`actions-upload`): the release and every package must
+   have been uploaded by `github-actions[bot]`, and each package's SHA-256
+   must be the digest GitHub recorded for it;
 4. adds the release to the suite only if every package verified, and records
    it as rejected, with the reason, otherwise.
 
 The archive keeps the newest 3 releases of each project: a per-build kernel
 package is removed when the last release carrying it ages out.
+
+Private projects (SmoothRouter) need a GitHub token with read access to their
+releases: a fine-grained token limited to those repositories, permission
+Contents: read only, in `/etc/smoothapt/github-token`:
+
+```
+install -m 640 -g smoothapt /dev/stdin /etc/smoothapt/github-token <<< '<token>'
+```
 
 State, per project: `/var/lib/smoothapt/state/<owner>__<repo>.json`. Log:
 `journalctl -u smoothapt-ingest`.

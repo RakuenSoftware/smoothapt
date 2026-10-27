@@ -1,12 +1,19 @@
 # Projects smoothapt ingests, one per line:
 #
-#   <github-repo>  <archive>  <suite>  <workflow>
+#   <github-repo>  <archive>  <suite>  <workflow>  <check>
 #
 # archive   reprepro archive under /var/lib/smoothapt/archives (served as
 #           /<archive>/): "public", or "smoothrouter" for the per-user one.
 # workflow  the workflow file whose attestations a package must carry; any
 #           other signer (another repo, another workflow, a PR run) is refused.
+# check     "attestation": the package's build-provenance attestation must
+#           verify against the public Sigstore log (public repositories).
+#           "actions-upload": a private repository, whose attestations are not
+#           in that log; the release and package must have been uploaded by
+#           GitHub Actions, with the digest GitHub recorded. Needs the token in
+#           /etc/smoothapt/github-token.
 #
 # Every release the workflow publishes is ingested, prereleases included:
 # a build from main reaches the archive with no manual step.
-RakuenSoftware/smoothkernel  public  common  release.yml
+RakuenSoftware/smoothkernel   public        common        release.yml  attestation
+RakuenSoftware/smoothrouter   smoothrouter  smoothrouter  release.yml  actions-upload
