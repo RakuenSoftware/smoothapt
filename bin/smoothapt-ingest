@@ -186,10 +186,15 @@ def prune(src, state):
 def run(src):
     state = load_state(src["repo"])
     releases = fetch_json(f"{API}/repos/{src['repo']}/releases?per_page=30")
-    releases.sort(key=lambda r: r["published_at"] or "")
+    releases = sorted((r for r in releases if not r["draft"]), key=lambda r: r["published_at"] or "")
+    # A project's first ingest starts from its newest release: the archive
+    # only ever serves the newest anyway, and older builds would each be
+    # downloaded and verified only to be pruned.
+    if not state["ingested"]:
+        releases = releases[-1:]
     for rel in releases:
         tag = rel["tag_name"]
-        if rel["draft"] or tag in state["ingested"] or tag in state["rejected"]:
+        if tag in state["ingested"] or tag in state["rejected"]:
             continue
         # Older than what is already here: it was superseded before smoothapt
         # saw it, and apt would never pick it anyway.
