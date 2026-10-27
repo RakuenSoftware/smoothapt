@@ -1,13 +1,14 @@
 #!/bin/sh
 # Manage the per-user certificates of an access-controlled archive.
 #
-#   smoothapt-user add    <archive> <id>   issue a certificate, print it and its key
+#   smoothapt-user add    <archive> <id>   issue a certificate (smoothapt-image uses it)
 #   smoothapt-user revoke <archive> <id>   withdraw it; apt is refused at once
 #   smoothapt-user list   <archive>        ids with access
 #
 # A user's credential is a client certificate issued by smoothapt's CA, with
-# the user id as its subject. It is part of the image built for that user, and
-# apt presents it on every request. The host's nginx checks it against the CA;
+# the user id as its subject. It and its key stay on this server
+# (<archive>.keys/<id>.pem, root only); smoothapt-image makes it part of the
+# images built for that user, and apt presents it on every request. The host's nginx checks it against the CA;
 # this container's nginx refuses revoked serials (a file per serial in
 # <archive>.revoked/, checked per request) and logs every request with
 # the id. Every add and revoke is appended to <archive>.log.
@@ -23,6 +24,7 @@ usage() { sed -n '3,5s/^# //p' "$0" >&2; exit 2; }
 cmd=$1 archive=$2
 case $archive in *[!a-z0-9-]* | '') echo "bad archive name: $archive" >&2; exit 2 ;; esac
 index=$DIR/$archive.certs      # "<id> <serial>" per issued certificate
+keys=$DIR/$archive.keys        # <id>.pem: certificate and key, root only
 revoked=$DIR/$archive.revoked  # one empty file per revoked serial
 [ -f "$index" ] || { echo "$archive has no user list ($index)" >&2; exit 1; }
 
@@ -47,9 +49,11 @@ add)
         -set_serial "0x$(openssl rand -hex 16)" -days "$DAYS" -sha256 \
         -extfile "$tmp/ext" -out "$tmp/cert.pem" 2>/dev/null
     serial=$(openssl x509 -in "$tmp/cert.pem" -noout -serial | cut -d= -f2)
+    install -d -m 700 "$keys"
+    (umask 077; cat "$tmp/cert.pem" "$tmp/key.pem" > "$keys/$id.pem")
     echo "$id $serial" >> "$index"
     record add "$id $serial"
-    cat "$tmp/cert.pem" "$tmp/key.pem"
+    openssl x509 -in "$tmp/cert.pem" -noout -subject -serial
     ;;
 revoke)
     [ $# -eq 3 ] || usage
@@ -58,6 +62,7 @@ revoke)
     [ -n "$serial" ] || { echo "$id has no access to $archive" >&2; exit 1; }
     install -m 644 /dev/null "$revoked/$serial"
     awk -v id="$id" '$1 != id' "$index" > "$index.tmp" && mv "$index.tmp" "$index"
+    rm -f "$keys/$id.pem"
     record revoke "$id $serial"
     ;;
 list)

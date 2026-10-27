@@ -37,6 +37,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 SOURCES = os.path.join(ROOT, "conf", "sources")
 ARCHIVES = "/var/lib/smoothapt/archives"
 STATE = "/var/lib/smoothapt/state"
+# Base installer images (a release's .iso assets), from which smoothapt-image
+# makes each user's image. Only the newest release's are kept.
+IMAGES = "/var/lib/smoothapt/images"
+# Downloads are staged on disk: /tmp is a small tmpfs, too small for an ISO.
+WORK = "/var/lib/smoothapt/tmp"
 KEEP = 3
 OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 API = "https://api.github.com"
@@ -193,23 +198,33 @@ def ingest_release(src, rel):
     debs = [a for a in rel["assets"] if a["name"].endswith(".deb")
             # Debug symbols are a GitHub-release download, not an apt package.
             and "-dbg_" not in a["name"]]
+    isos = [a for a in rel["assets"] if a["name"].endswith(".iso")]
     if not debs:
         raise Rejected("no .deb assets")
-    with tempfile.TemporaryDirectory(prefix="smoothapt-") as tmp:
-        paths = []
-        for a in debs:
+    os.makedirs(WORK, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="smoothapt-", dir=WORK) as tmp:
+        paths, images = [], []
+        for a in debs + isos:
             path = os.path.join(tmp, a["name"])
             digest = download(a, path)
             if src["check"] == "actions-upload":
                 verify_upload(rel, a, path, digest)
             else:
                 verify(src, path, digest, tmp)
-            paths.append(path)
+            (images if a in isos else paths).append(path)
         names = sorted({deb_name(p) for p in paths})
         try:
             reprepro(src["archive"], "includedeb", src["suite"], *paths)
         except RuntimeError as e:
             raise Rejected(str(e))
+        if images:
+            # The release's base images replace the previous ones.
+            base = os.path.join(IMAGES, src["archive"], "base")
+            os.makedirs(base, exist_ok=True)
+            for old in os.listdir(base):
+                os.remove(os.path.join(base, old))
+            for path in images:
+                os.replace(path, os.path.join(base, os.path.basename(path)))
     return names
 
 
