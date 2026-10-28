@@ -7,8 +7,9 @@ the project's suite. A public project's packages are checked against their
 GitHub build-provenance attestations in the public Sigstore log. A private
 project's attestations are not in that log, so its packages are checked
 against what GitHub records about the release instead (see verify_upload). A release
-that fails verification is recorded as rejected, with the reason, and never
-retried; a network or GitHub error leaves it to the next run.
+that fails verification is recorded as rejected, with the reason, and is not
+retried until smoothapt itself changes, since a rejection may be smoothapt's
+own fault; a network or GitHub error leaves it to the next run.
 
 The archive keeps the packages of the newest KEEP releases of each project.
 A package name that only older releases carry (a per-build kernel such as
@@ -50,6 +51,10 @@ API = "https://api.github.com"
 # only raises GitHub's rate limit.
 TOKEN_FILE = "/etc/smoothapt/github-token"
 ACTIONS_BOT = "github-actions[bot]"
+# What made a rejection: a release rejected by an older smoothapt is checked
+# again.
+with open(os.path.realpath(__file__), "rb") as f:
+    VERIFIER = hashlib.sha256(f.read()).hexdigest()
 
 
 class Rejected(Exception):
@@ -264,7 +269,9 @@ def run(src):
         releases = releases[::-1]
     for rel in releases:
         tag = rel["tag_name"]
-        if tag in state["ingested"] or tag in state["rejected"]:
+        if tag in state["ingested"]:
+            continue
+        if state["rejected"].get(tag, {}).get("by") == VERIFIER:
             continue
         # Older than what is already here: it was superseded before smoothapt
         # saw it, and apt would never pick it anyway.
@@ -274,7 +281,8 @@ def run(src):
         try:
             names = ingest_release(src, rel)
         except Rejected as e:
-            state["rejected"][tag] = {"reason": str(e), "at": time.strftime("%FT%TZ", time.gmtime())}
+            state["rejected"][tag] = {"reason": str(e), "by": VERIFIER,
+                                      "at": time.strftime("%FT%TZ", time.gmtime())}
             save_state(src["repo"], state)
             log(f"{src['repo']} {tag}: REJECTED: {e}")
             continue
