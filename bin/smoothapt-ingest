@@ -169,12 +169,15 @@ def verify(src, deb, digest, workdir):
                 f.write(json.dumps(att["bundle"]).encode())
             else:
                 f.write(snappy.uncompress(fetch(att["bundle_url"], accept="*/*")))
+        # cosign refuses files over 128 MiB unless told otherwise, and the
+        # ISOs are larger.
         r = subprocess.run(
             ["cosign", "verify-blob-attestation", "--new-bundle-format",
              "--bundle", bundle, "--type", "slsaprovenance1",
              "--certificate-oidc-issuer", OIDC_ISSUER,
              "--certificate-identity-regexp", identity, deb],
-            capture_output=True, text=True)
+            capture_output=True, text=True,
+            env={**os.environ, "COSIGN_MAX_ATTACHMENT_SIZE": "8GiB"})
         if r.returncode == 0:
             return
         errors.append(r.stderr.strip().splitlines()[-1] if r.stderr.strip() else f"exit {r.returncode}")
