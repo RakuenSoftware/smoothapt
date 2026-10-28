@@ -39,7 +39,7 @@ SOURCES = os.path.join(ROOT, "conf", "sources")
 ARCHIVES = "/var/lib/smoothapt/archives"
 STATE = "/var/lib/smoothapt/state"
 # Base installer images (a release's .iso assets), from which smoothapt-image
-# makes each user's image. Only the newest release's are kept.
+# makes each user's image. Only each project's newest release's are kept.
 IMAGES = "/var/lib/smoothapt/images"
 # Downloads are staged on disk: /tmp is a small tmpfs, too small for an ISO.
 WORK = "/var/lib/smoothapt/tmp"
@@ -202,6 +202,11 @@ def reprepro(archive, *args):
     return r.stdout
 
 
+def iso_product(path):
+    """smoothnas-0.1.70-amd64.iso -> smoothnas"""
+    return re.split(r"-[0-9]", os.path.basename(path), maxsplit=1)[0]
+
+
 def ingest_release(src, rel):
     debs = [a for a in rel["assets"] if a["name"].endswith(".deb")
             # Debug symbols are a GitHub-release download, not an apt package.
@@ -226,11 +231,14 @@ def ingest_release(src, rel):
         except RuntimeError as e:
             raise Rejected(str(e))
         if images:
-            # The release's base images replace the previous ones.
+            # The release's base images replace the project's previous ones;
+            # other projects in the same archive keep theirs.
             base = os.path.join(IMAGES, src["archive"], "base")
             os.makedirs(base, exist_ok=True)
+            products = {iso_product(p) for p in images}
             for old in os.listdir(base):
-                os.remove(os.path.join(base, old))
+                if iso_product(old) in products:
+                    os.remove(os.path.join(base, old))
             for path in images:
                 os.replace(path, os.path.join(base, os.path.basename(path)))
     return names

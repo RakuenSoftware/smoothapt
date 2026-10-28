@@ -1,10 +1,11 @@
 #!/bin/sh
 # Make a user's installer image from the newest base image.
 #
-#   smoothapt-image <archive> <id>
+#   smoothapt-image <archive> <id> [<arch>]
 #
 # The base image comes from the project's release (smoothapt-ingest keeps the
-# newest under /var/lib/smoothapt/images/<archive>/base): the same for
+# newest under /var/lib/smoothapt/images/<archive>/base, one per architecture;
+# <arch> picks which, amd64 unless given): the same for
 # everyone, with no credential in it. The user's image is that base with the
 # user's certificate and key (smoothapt-user add) on the medium as
 # /smoothrouter/client.pem, which the installer installs for apt. It is signed
@@ -21,15 +22,16 @@ set -eu
 IMAGES=/var/lib/smoothapt/images
 KEYS=/etc/smoothapt/users
 
-[ $# -eq 2 ] || { sed -n '4p' "$0" | sed 's/^# //' >&2; exit 2; }
-archive=$1 id=$2
+[ $# -eq 2 ] || [ $# -eq 3 ] || { sed -n '4p' "$0" | sed 's/^# //' >&2; exit 2; }
+archive=$1 id=$2 arch=${3:-amd64}
 case $archive in *[!a-z0-9-]* | '') echo "bad archive name: $archive" >&2; exit 2 ;; esac
 case $id in *[!a-z0-9._-]* | '' | [._-]*) echo "bad id: $id" >&2; exit 2 ;; esac
+case $arch in *[!a-z0-9]* | '') echo "bad architecture: $arch" >&2; exit 2 ;; esac
 
 pem=$KEYS/$archive.keys/$id.pem
 [ -f "$pem" ] || { echo "$id has no certificate for $archive (smoothapt-user add $archive $id)" >&2; exit 1; }
-base=$(find "$IMAGES/$archive/base" -maxdepth 1 -name '*.iso' 2>/dev/null | sort | tail -n 1)
-[ -n "$base" ] || { echo "no base image for $archive yet (ingested from its releases)" >&2; exit 1; }
+base=$(find "$IMAGES/$archive/base" -maxdepth 1 -name "*-$arch.iso" 2>/dev/null | sort -V | tail -n 1)
+[ -n "$base" ] || { echo "no $arch base image for $archive yet (ingested from its releases)" >&2; exit 1; }
 
 out=$IMAGES/$archive/users/$id
 install -d -m 700 "$out"
@@ -50,6 +52,7 @@ openssl dgst -sha256 -sign "$work/key.pem" -out "$work/$name.sig" "$work/$name"
 rm -f "$work/key.pem"
 (cd "$work" && sha256sum "$name" > "$name.sha256")
 
-rm -f "$out"/*
+# Replace this architecture's previous image, not the others'.
+rm -f "$out"/*-"$arch"-"$id".iso*
 mv "$work/$name" "$work/$name.sig" "$work/$name.crt" "$work/$name.sha256" "$out/"
 echo "$out/$name"

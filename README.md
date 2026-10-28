@@ -114,7 +114,7 @@ their image:
 
 ```
 smoothapt-user add smoothrouter <id>      # once: issue the certificate
-smoothapt-image smoothrouter <id>         # the user's image from the newest base
+smoothapt-image smoothrouter <id> [arch]  # the user's image from the newest base (amd64)
 ```
 
 The image is the base with the user's certificate and key on the medium as
