@@ -60,7 +60,8 @@ Acquire::https::updates.rakuensoftware.com::SslKey "<key>";
    have been uploaded by `github-actions[bot]`, and each package's SHA-256
    must be the digest GitHub recorded for it;
 4. adds the release to the suite only if every package verified, and records
-   it as rejected, with the reason, otherwise.
+   it as rejected, with the reason, otherwise. A rejected release is checked
+   again once smoothapt itself changes, in case the fault was smoothapt's.
 
 The archive keeps the newest 3 releases of each project: a per-build kernel
 package is removed when the last release carrying it ages out.
