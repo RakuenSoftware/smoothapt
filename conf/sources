@@ -1,6 +1,6 @@
 # Projects smoothapt ingests, one per line:
 #
-#   <github-repo>  <archive>  <suite>  <workflow>  <check>
+#   <github-repo>  <archive>  <suite>  <workflow>  <check>  [stable]
 #
 # archive   reprepro archive under /var/lib/smoothapt/archives (served as
 #           /<archive>/): "public", or "smoothrouter" for the per-user one.
@@ -13,9 +13,12 @@
 #           GitHub Actions, with the digest GitHub recorded. Needs the token in
 #           /etc/smoothapt/github-token.
 #
-# Every release the workflow publishes is ingested, prereleases included:
-# a build from main reaches the archive with no manual step.
+# stable    optional: take only full releases and skip prereleases without
+#           downloading them (SmoothNAS's testing builds are prereleases).
+#
+# Otherwise every release the workflow publishes is ingested, prereleases
+# included: a build from main reaches the archive with no manual step.
 RakuenSoftware/smoothkernel   public        common        release.yml  attestation
 RakuenSoftware/smoothrouter   smoothrouter  smoothrouter  release.yml  actions-upload
 RakuenSoftware/smoothfs       public        smoothnas     release-please.yml  attestation
-RakuenSoftware/smoothnas      public        smoothnas     release.yml  attestation
+RakuenSoftware/smoothnas      public        smoothnas     release.yml  attestation  stable
