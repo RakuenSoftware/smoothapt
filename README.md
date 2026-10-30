@@ -48,7 +48,9 @@ Acquire::https::updates.rakuensoftware.com::SslKey "<key>";
 `conf/sources` lists the projects. Every hour `smoothapt-ingest`:
 
 1. lists each project's GitHub releases, prereleases included, so every
-   build the pipeline publishes from `main` reaches the archive unattended;
+   build the pipeline publishes from `main` reaches the archive unattended.
+   A project marked `stable` (SmoothNAS) takes only full releases; its
+   prereleases are skipped without being downloaded;
 2. downloads every `.deb` of a release it has not seen (debug-symbol packages
    excepted);
 3. verifies it. For a public project (`attestation`), its attestation is

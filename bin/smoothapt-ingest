@@ -111,11 +111,12 @@ def read_sources():
             line = line.split("#", 1)[0].split()
             if not line:
                 continue
-            if len(line) != 5 or line[4] not in ("attestation", "actions-upload"):
-                sys.exit(f"{SOURCES}:{n}: expected <repo> <archive> <suite> <workflow> attestation|actions-upload")
-            repo, archive, suite, workflow, check = line
+            if (len(line) not in (5, 6) or line[4] not in ("attestation", "actions-upload")
+                    or line[5:] not in ([], ["stable"])):
+                sys.exit(f"{SOURCES}:{n}: expected <repo> <archive> <suite> <workflow> attestation|actions-upload [stable]")
+            repo, archive, suite, workflow, check = line[:5]
             sources.append(dict(repo=repo, archive=archive, suite=suite,
-                                workflow=workflow, check=check))
+                                workflow=workflow, check=check, stable=line[5:] == ["stable"]))
     return sources
 
 
@@ -267,12 +268,15 @@ def run(src):
             hint = "token in " + TOKEN_FILE + " has no access" if github_token() else "no token in " + TOKEN_FILE
             raise RuntimeError(f"repository not found or private ({hint})") from None
         raise
-    releases = sorted((r for r in releases if not r["draft"]), key=lambda r: r["published_at"] or "")
+    # A "stable" project serves only its full releases: its prereleases (e.g.
+    # SmoothNAS's testing builds) are never meant for the archive, so they are
+    # not downloaded, verified or reported as rejected.
+    releases = sorted((r for r in releases if not r["draft"] and not (src["stable"] and r["prerelease"])),
+                      key=lambda r: r["published_at"] or "")
     # A project's first ingest starts from its newest release it can take:
     # the archive only ever serves the newest anyway, and older builds would
     # each be downloaded and verified only to be pruned. It walks back past
-    # releases that are refused (e.g. SmoothNAS's testing prereleases, signed
-    # by a run on the testing branch) until one is ingested.
+    # releases that are refused until one is ingested.
     if not state["ingested"]:
         releases = releases[::-1]
     for rel in releases:
